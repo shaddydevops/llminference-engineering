@@ -3258,3 +3258,485 @@ Modern inference engineering is fundamentally about balancing:
 This tension drives many of the architectural decisions studied later in the course.
 
 ---
+
+
+
+# Benchmarking Fundamentals
+
+Inference optimization without measurement is largely guesswork.
+
+One of the defining characteristics of strong inference engineers is:
+
+# they measure systems carefully.
+
+Modern inference systems are extraordinarily complex.
+
+Performance depends on:
+
+* GPU architecture
+* VRAM bandwidth
+* context length
+* batching strategy
+* scheduler behavior
+* quantization
+* concurrency
+* KV cache efficiency
+* attention kernels
+
+As a result:
+small assumptions can easily become incorrect.
+
+Benchmarking exists to reveal:
+
+## what the system is actually doing.
+
+---
+
+# What Is Benchmarking?
+
+Benchmarking is the process of:
+
+# measuring system performance under controlled conditions.
+
+Inference benchmarking attempts to answer questions such as:
+
+* How fast is token generation?
+* How much latency exists?
+* How efficiently is the GPU utilized?
+* How does performance change under concurrency?
+* What happens when context length increases?
+* What optimization actually improves throughput?
+
+Benchmarking transforms:
+
+```text id="o86pjc"
+opinions
+```
+
+into:
+
+```text id="vyjlwm"
+measurable evidence
+```
+
+---
+
+# Why Benchmarking Matters
+
+Many inference optimizations introduce:
+
+* tradeoffs
+* regressions
+* hidden costs
+
+An optimization that improves:
+
+```text id="3mym5q"
+tokens/sec
+```
+
+may worsen:
+
+```text id="j36kzx"
+TTFT
+```
+
+Another optimization may:
+
+* reduce memory usage
+* but increase latency
+
+Without benchmarking:
+these effects remain invisible.
+
+Professional inference engineering is therefore:
+
+## measurement-driven engineering.
+
+---
+
+# Common Benchmarking Metrics
+
+Modern inference systems commonly measure:
+
+* latency
+* TTFT
+* throughput
+* tokens/sec
+* requests/sec
+* GPU utilization
+* VRAM usage
+* queue time
+* tail latency
+
+Each metric reveals different system behavior.
+
+---
+
+# Tokens Per Second (tok/s)
+
+One of the most common inference metrics is:
+
+# tokens per second.
+
+This measures:
+
+## how quickly the system generates tokens.
+
+Higher tok/s usually indicates:
+
+* better throughput
+* higher GPU efficiency
+* improved scheduling
+
+However:
+tok/s alone is insufficient.
+
+A system can achieve high tok/s while still delivering poor user experience.
+
+---
+
+# Time To First Token (TTFT)
+
+TTFT measures:
+
+```text id="7j1qmn"
+Request start → first generated token
+```
+
+This is often one of the most important production metrics.
+
+Why?
+
+Because users strongly perceive:
+
+# responsiveness.
+
+Even if generation afterward is fast:
+poor TTFT makes systems feel slow.
+
+---
+
+# End-to-End Latency
+
+Total request latency measures:
+
+```text id="b6ulga"
+Request start → generation completion
+```
+
+This metric matters for:
+
+* APIs
+* batch jobs
+* enterprise systems
+* offline processing
+
+Different applications prioritize different latency metrics.
+
+---
+
+# GPU Utilization
+
+Inference engineers closely monitor:
+
+# GPU utilization.
+
+A GPU operating at:
+
+```text id="hqmjlwm"
+10% utilization
+```
+
+is economically inefficient.
+
+Low utilization may indicate:
+
+* insufficient batching
+* scheduler inefficiency
+* memory bottlenecks
+* decode underutilization
+
+Efficient serving systems attempt to maximize:
+
+## useful GPU work.
+
+---
+
+# VRAM Usage
+
+VRAM monitoring is critical because:
+memory often becomes the primary bottleneck.
+
+Inference systems monitor:
+
+* model weight memory
+* KV cache growth
+* fragmentation
+* temporary tensor allocations
+
+VRAM exhaustion causes:
+
+* crashes
+* OOM errors
+* degraded concurrency
+* scheduler failures
+
+Memory benchmarking is therefore essential.
+
+---
+
+# Tail Latency Metrics
+
+Production systems often benchmark:
+
+* p50 latency
+* p95 latency
+* p99 latency
+
+These percentile metrics reveal:
+
+# worst-case behavior.
+
+Example:
+
+```text id="rcjlwm"
+p95 latency = 2 seconds
+```
+
+means:
+95% of requests complete within 2 seconds.
+
+Tail latency matters because:
+users notice slow outliers strongly.
+
+---
+
+# Benchmarking Under Load
+
+A benchmark using:
+
+```text id="wxvgbn"
+1 request
+```
+
+does not represent:
+
+```text id="11ijm2"
+1,000 concurrent users
+```
+
+Production benchmarking therefore often simulates:
+
+* concurrency
+* queue buildup
+* scheduler pressure
+* long-running requests
+
+Inference behavior changes dramatically under load.
+
+---
+
+# Synthetic vs Real Workloads
+
+Benchmarks can use:
+
+* synthetic prompts
+* real application traffic
+* replayed request traces
+
+Synthetic workloads are easier to control.
+
+Real workloads better represent production behavior.
+
+Strong inference evaluation often combines both.
+
+---
+
+# Warmup Effects
+
+Initial inference runs are often slower because:
+
+* kernels initialize
+* CUDA graphs compile
+* memory allocators warm up
+* caches populate
+
+Therefore:
+professional benchmarks usually include:
+
+# warmup iterations.
+
+Failing to warm up can produce misleading measurements.
+
+---
+
+# Reproducibility
+
+Benchmarking requires:
+
+# controlled conditions.
+
+Otherwise:
+results become unreliable.
+
+Important controls include:
+
+* fixed hardware
+* consistent prompts
+* identical sampling parameters
+* stable concurrency levels
+* fixed software versions
+
+Without reproducibility:
+performance comparisons become meaningless.
+
+---
+
+# Benchmark Noise
+
+Performance measurements naturally fluctuate.
+
+Causes include:
+
+* background processes
+* thermal throttling
+* scheduler variance
+* memory fragmentation
+* network activity
+
+Therefore:
+benchmarks should:
+
+* run multiple trials
+* average results
+* analyze variance
+
+Professional benchmarking is statistical, not anecdotal.
+
+---
+
+# Benchmarking Pitfalls
+
+Common benchmarking mistakes include:
+
+* comparing different hardware unfairly
+* ignoring TTFT
+* measuring only average latency
+* failing to warm up
+* benchmarking unrealistic workloads
+* using tiny prompts only
+* ignoring concurrency
+
+These mistakes can produce misleading conclusions.
+
+---
+
+# Why Visualization Matters
+
+Benchmark data becomes more useful when visualized.
+
+Inference engineers often plot:
+
+* latency histograms
+* throughput curves
+* GPU utilization graphs
+* memory growth over time
+* concurrency scaling behavior
+
+Visualization reveals:
+
+* bottlenecks
+* instability
+* scaling limits
+* optimization impact
+
+Clearly communicating results is part of professional engineering.
+
+---
+
+# Benchmarking and Optimization
+
+Optimization should always follow:
+
+# measurement.
+
+Not intuition.
+
+The workflow should be:
+
+```text id="p2nh8m"
+Measure
+    ↓
+Identify bottleneck
+    ↓
+Optimize
+    ↓
+Measure again
+```
+
+This cycle defines performance engineering.
+
+---
+
+# Benchmarking Is Experimental Science
+
+Strong inference engineers behave almost like scientists.
+
+They:
+
+* form hypotheses
+* design experiments
+* collect measurements
+* analyze results
+* validate assumptions
+
+Benchmarking therefore requires:
+
+* rigor
+* skepticism
+* reproducibility
+* careful interpretation
+
+This mindset is extremely important.
+
+---
+
+# Engineering Mindset
+
+Students should begin asking:
+
+* What metric am I optimizing?
+* What bottleneck exists?
+* Did performance actually improve?
+* Did another metric regress?
+* Is this benchmark realistic?
+* Is GPU utilization healthy?
+* Is memory the real bottleneck?
+
+These questions define professional inference engineering.
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+* benchmarking measures real system behavior
+* optimization without measurement is unreliable
+* TTFT and tok/s capture different performance aspects
+* GPU utilization strongly affects economics
+* VRAM monitoring is essential
+* tail latency matters in production
+* concurrency changes inference behavior dramatically
+* warmup effects influence benchmarks
+* reproducibility is critical
+* benchmark visualization reveals bottlenecks
+* optimization should always be measurement-driven
+
+Benchmarking is one of the most important disciplines in production inference engineering.
+
+Without careful measurement:
+systems optimization becomes guesswork.
+
+---
