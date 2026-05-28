@@ -1,0 +1,8 @@
+transformers
+torch
+accelerate
+psutil
+tabulate
+pandas
+matplotlib
+jupyter
