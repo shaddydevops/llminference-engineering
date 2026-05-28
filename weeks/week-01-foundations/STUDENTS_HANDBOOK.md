@@ -2693,3 +2693,568 @@ KV cache is one of the most important ideas in modern inference systems.
 Many later optimizations in this course build directly on this concept.
 
 ---
+
+
+# Latency vs Throughput
+
+One of the central challenges in inference engineering is balancing:
+
+* latency
+* throughput
+
+These two metrics are foundational to production serving systems.
+
+Nearly every inference optimization technique discussed later in this course exists to improve one of these metrics:
+
+* batching
+* quantization
+* FlashAttention
+* speculative decoding
+* scheduler optimization
+* KV cache systems
+
+However:
+improving one metric often worsens the other.
+
+This creates:
+
+# engineering tradeoffs.
+
+Understanding these tradeoffs is essential for designing production inference systems.
+
+---
+
+# What Is Latency?
+
+Latency refers to:
+
+# how long a request takes.
+
+In inference systems:
+latency measures:
+
+* response delay
+* token generation delay
+* request completion time
+
+From a user perspective:
+latency is experienced as:
+
+## waiting.
+
+---
+
+# Common Latency Metrics
+
+Inference systems often measure:
+
+* TTFT (Time To First Token)
+* inter-token latency
+* total response latency
+* request completion time
+
+Each metric captures a different aspect of user experience.
+
+---
+
+# Time To First Token (TTFT)
+
+TTFT measures:
+
+```text id="n0dgrw"
+Request start → first generated token
+```
+
+This is one of the most important production metrics.
+
+Users perceive TTFT strongly because:
+it determines:
+
+## how quickly the system feels responsive.
+
+A system with poor TTFT often feels:
+
+* sluggish
+* unresponsive
+* slow
+
+even if later token generation is fast.
+
+---
+
+# Inter-Token Latency
+
+Inter-token latency measures:
+
+## delay between generated tokens.
+
+Example:
+
+```text id="yo8v4y"
+Token 1 → Token 2
+Token 2 → Token 3
+```
+
+Low inter-token latency creates:
+
+* smooth streaming
+* conversational responsiveness
+* better user experience
+
+High inter-token latency creates:
+
+* choppy generation
+* unstable streaming
+* perceived slowness
+
+---
+
+# Total Response Latency
+
+Total latency measures:
+
+```text id="8z2u5x"
+Request start → generation completion
+```
+
+This matters for:
+
+* batch jobs
+* offline processing
+* long generations
+* backend pipelines
+
+Different applications optimize different latency metrics.
+
+---
+
+# What Is Throughput?
+
+Throughput measures:
+
+# how much work the system completes over time.
+
+In inference systems:
+throughput is often measured as:
+
+* tokens/sec
+* requests/sec
+* concurrent generations handled
+
+Throughput reflects:
+
+## system productivity.
+
+---
+
+# Throughput vs User Experience
+
+High throughput means:
+the system processes more work overall.
+
+But:
+high throughput does not necessarily mean:
+good user experience.
+
+Example:
+
+A server may process:
+
+```text id="k68j0q"
+10,000 tokens/sec
+```
+
+but individual users may still experience:
+
+* long delays
+* poor responsiveness
+* high TTFT
+
+This distinction is extremely important.
+
+---
+
+# Why Latency and Throughput Conflict
+
+Many optimizations that improve throughput:
+increase latency.
+
+Example:
+
+# batching.
+
+If requests are grouped together:
+the GPU operates more efficiently.
+
+This improves:
+
+* hardware utilization
+* tokens/sec
+* overall throughput
+
+But:
+requests may wait longer before execution begins.
+
+This increases:
+
+* queue time
+* TTFT
+* user-perceived latency
+
+This creates a fundamental tradeoff.
+
+---
+
+# Batching Example
+
+Suppose:
+the GPU processes:
+
+```text id="pmemjx"
+1 request immediately
+```
+
+Latency becomes low.
+
+But:
+GPU utilization may remain poor.
+
+Now suppose:
+the server waits to collect:
+
+```text id="w7kkjn"
+32 requests
+```
+
+before execution.
+
+GPU efficiency improves dramatically.
+
+But:
+early requests wait longer.
+
+This illustrates the tension between:
+
+* efficiency
+* responsiveness
+
+---
+
+# GPU Utilization
+
+Modern GPUs are expensive.
+
+Inference systems therefore try to maximize:
+
+# GPU utilization.
+
+Idle GPUs waste money.
+
+However:
+aggressive utilization strategies can hurt:
+
+* latency
+* responsiveness
+* user experience
+
+Production systems must balance these carefully.
+
+---
+
+# Queueing Effects
+
+Inference servers often maintain:
+
+# request queues.
+
+When traffic spikes:
+requests accumulate.
+
+Queueing increases:
+
+* latency
+* wait time
+* TTFT
+
+Even powerful GPUs can experience poor latency if:
+request scheduling becomes inefficient.
+
+---
+
+# Concurrency
+
+Concurrency refers to:
+
+## how many requests are handled simultaneously.
+
+Higher concurrency can improve:
+
+* throughput
+* infrastructure efficiency
+
+But it also increases:
+
+* memory pressure
+* scheduling complexity
+* KV cache usage
+
+Concurrency optimization is one of the most difficult aspects of serving infrastructure.
+
+---
+
+# Service-Level Agreements (SLAs)
+
+Production systems often operate under:
+
+# SLAs.
+
+An SLA defines acceptable performance targets.
+
+Example:
+
+```text id="jlwmfj"
+TTFT < 200ms
+```
+
+or:
+
+```text id="nq6f6m"
+95th percentile latency < 1 second
+```
+
+Inference engineers optimize systems specifically to satisfy these constraints.
+
+---
+
+# Tail Latency
+
+Not all requests complete at the same speed.
+
+Some requests become:
+
+* unusually slow
+* blocked
+* delayed
+
+This creates:
+
+# tail latency.
+
+Tail latency is extremely important because:
+users notice worst-case behavior strongly.
+
+Production systems often optimize:
+
+* p95 latency
+* p99 latency
+
+rather than only average latency.
+
+---
+
+# Why Tail Latency Matters
+
+Suppose:
+average latency is:
+
+```text id="7k0xgx"
+200ms
+```
+
+But:
+5% of requests take:
+
+```text id="26n5pi"
+10 seconds
+```
+
+Users will perceive the system as unreliable.
+
+This is why:
+tail latency optimization is a major production concern.
+
+---
+
+# Throughput Optimization Strategies
+
+Common throughput optimizations include:
+
+* batching
+* quantization
+* fused kernels
+* speculative decoding
+* cache reuse
+* optimized schedulers
+
+These techniques attempt to maximize:
+
+## useful work completed per unit time.
+
+---
+
+# Latency Optimization Strategies
+
+Latency optimization often focuses on:
+
+* reducing TTFT
+* minimizing queue delay
+* improving scheduling fairness
+* reducing memory bottlenecks
+* accelerating decode
+
+Latency-sensitive applications prioritize responsiveness over raw throughput.
+
+---
+
+# Different Applications Need Different Optimizations
+
+Different products optimize differently.
+
+## Chat Systems
+
+Prioritize:
+
+* low TTFT
+* smooth streaming
+* responsiveness
+
+## Offline Processing
+
+Prioritize:
+
+* throughput
+* cost efficiency
+* batch productivity
+
+## Enterprise APIs
+
+Often require:
+
+* predictable latency
+* SLA stability
+* concurrency management
+
+Inference optimization therefore depends heavily on:
+
+# workload characteristics.
+
+---
+
+# Cost Implications
+
+Latency and throughput directly affect:
+
+# infrastructure cost.
+
+Poor throughput means:
+
+* underutilized GPUs
+* wasted compute
+* higher serving cost
+
+Poor latency means:
+
+* degraded user experience
+* dissatisfied users
+* SLA violations
+
+Inference engineering therefore involves:
+
+## economic optimization.
+
+---
+
+# Why Scheduling Matters
+
+Schedulers determine:
+
+* which requests run
+* when requests execute
+* how batches form
+* how memory is allocated
+
+Good scheduling can dramatically improve:
+
+* throughput
+* latency
+* fairness
+* GPU utilization
+
+Poor scheduling can destroy system efficiency.
+
+This is why scheduler design is central to systems like vLLM.
+
+---
+
+# Mental Model
+
+Students should think of:
+
+## latency
+
+as:
+
+```text id="a7p09k"
+individual user waiting time
+```
+
+and:
+
+## throughput
+
+as:
+
+```text id="y0jw3q"
+overall system productivity
+```
+
+Production inference systems constantly balance these competing objectives.
+
+---
+
+# Engineering Reality
+
+There is rarely:
+
+# a perfect optimization.
+
+Most production serving decisions involve:
+
+* tradeoffs
+* constraints
+* workload assumptions
+* business priorities
+
+Inference engineering is therefore:
+
+## optimization under competing objectives.
+
+This is what makes it difficult and interesting.
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+* latency measures response delay
+* throughput measures system productivity
+* TTFT strongly affects user experience
+* batching improves throughput but may worsen latency
+* GPUs should remain highly utilized
+* queueing increases latency
+* concurrency increases scheduling complexity
+* tail latency matters operationally
+* different applications optimize differently
+* schedulers strongly influence serving efficiency
+
+Modern inference engineering is fundamentally about balancing:
+
+* responsiveness
+* efficiency
+* cost
+* scalability
+
+This tension drives many of the architectural decisions studied later in the course.
+
+---
