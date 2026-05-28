@@ -1191,3 +1191,530 @@ Tokenization may appear simple, but it has profound implications for:
 * infrastructure scaling
 
 ---
+
+# The Transformer Forward Pass
+
+At the center of every language model inference system is:
+
+# the forward pass.
+
+The forward pass is the sequence of computations that transforms:
+
+* input token embeddings
+  into
+* next-token prediction scores.
+
+This process is responsible for most of the computational work during inference.
+
+Understanding the forward pass is essential because nearly every optimization discussed later in this course attempts to improve some aspect of it.
+
+Examples include:
+
+* FlashAttention
+* quantization
+* batching
+* tensor parallelism
+* KV caching
+* speculative decoding
+
+All exist to optimize the forward pass.
+
+---
+
+# High-Level View
+
+A simplified transformer inference pipeline looks like:
+
+```text
+Input Text
+    ↓
+Tokenization
+    ↓
+Token IDs
+    ↓
+Embeddings
+    ↓
+Transformer Layers
+    ↓
+Logits
+    ↓
+Sampling
+    ↓
+Generated Token
+```
+
+The forward pass primarily refers to:
+
+```text
+Embeddings → Transformer Layers → Logits
+```
+
+This is where:
+
+* GPU computation occurs
+* tensor operations dominate
+* memory bandwidth becomes critical
+
+---
+
+# Why It Is Called a “Forward” Pass
+
+Neural networks process information directionally.
+
+During inference:
+data moves:
+
+* from input
+* through layers
+* toward predictions
+
+This movement is called:
+
+# forward propagation.
+
+Unlike training:
+
+* no gradients are computed
+* no backward pass occurs
+* no weight updates happen
+
+Inference therefore performs:
+
+## forward-only computation.
+
+This is one reason inference is cheaper than training.
+
+---
+
+# Embedding Lookup
+
+The first stage of the forward pass is:
+
+# embedding lookup.
+
+Recall:
+the tokenizer converted text into integer token IDs.
+
+Example:
+
+```text
+[15496, 995]
+```
+
+These integers are meaningless by themselves.
+
+The embedding layer maps each token ID to:
+
+# a dense vector representation.
+
+Example:
+
+```text
+15496 → vector of dimension 4096
+```
+
+These vectors become the numerical representation processed by the transformer.
+
+---
+
+# Why Embeddings Matter
+
+Embeddings allow models to represent:
+
+* semantic relationships
+* syntactic structure
+* contextual similarities
+
+For example:
+tokens with related meanings often occupy nearby regions in embedding space.
+
+Embeddings transform discrete tokens into continuous mathematical representations suitable for neural computation.
+
+This transformation is foundational to modern NLP systems.
+
+---
+
+# Positional Information
+
+Transformers process tokens in parallel.
+
+Unlike recurrent networks:
+they do not inherently understand sequence order.
+
+Therefore:
+models must inject positional information.
+
+This is typically done using:
+
+* positional embeddings
+* rotary positional embeddings (RoPE)
+* sinusoidal encodings
+
+Without positional information:
+the model would not know whether:
+
+```text
+dog bites man
+```
+
+differs from:
+
+```text
+man bites dog
+```
+
+Sequence order matters enormously.
+
+---
+
+# Transformer Layers
+
+After embeddings are created, tensors move through:
+
+# transformer layers.
+
+Modern LLMs may contain:
+
+* dozens
+* or even hundreds
+
+of transformer blocks.
+
+Each layer performs:
+
+* attention operations
+* feed-forward transformations
+* normalization
+* residual connections
+
+These layers repeatedly refine token representations.
+
+---
+
+# Self-Attention
+
+The core innovation of transformers is:
+
+# self-attention.
+
+Self-attention allows each token to:
+
+## attend to other relevant tokens in the sequence.
+
+For example:
+
+```text
+The cat sat on the mat because it was soft.
+```
+
+The token:
+
+```text
+it
+```
+
+may attend strongly to:
+
+```text
+mat
+```
+
+because contextual relationships matter.
+
+Attention allows models to dynamically determine:
+
+* what information matters
+* what context should influence predictions
+
+---
+
+# Query, Key, and Value
+
+Self-attention operates using:
+
+* Queries (Q)
+* Keys (K)
+* Values (V)
+
+Each token generates:
+
+* a query vector
+* a key vector
+* a value vector
+
+The system computes:
+
+## similarity between queries and keys.
+
+These similarity scores determine:
+how much attention should be paid to different tokens.
+
+The resulting weighted combinations of values produce contextualized representations.
+
+---
+
+# Why Attention Is Expensive
+
+Attention requires:
+tokens to interact with other tokens.
+
+This creates large matrix operations involving:
+
+* sequence length
+* hidden dimensions
+* multiple attention heads
+
+As sequence length grows:
+attention computation becomes increasingly expensive.
+
+This is one reason long-context inference is difficult.
+
+Attention is often one of the most computationally expensive parts of transformer inference.
+
+---
+
+# Multi-Head Attention
+
+Modern transformers use:
+
+# multi-head attention.
+
+Instead of learning a single attention pattern:
+the model learns multiple parallel attention patterns simultaneously.
+
+Different heads may specialize in:
+
+* syntax
+* long-range dependencies
+* factual associations
+* code structure
+* punctuation relationships
+
+This increases representational capacity.
+
+But it also increases:
+
+* compute cost
+* memory usage
+* tensor complexity
+
+---
+
+# Feed-Forward Networks
+
+After attention, tokens pass through:
+
+# feed-forward networks (FFNs).
+
+These are large neural layers that:
+
+* transform activations
+* expand representational capacity
+* introduce nonlinearity
+
+FFNs often contain enormous parameter counts.
+
+In many transformers:
+
+## FFNs consume a substantial portion of total compute.
+
+---
+
+# Residual Connections
+
+Transformers use:
+
+# residual connections.
+
+Residual connections allow information to:
+
+* bypass layers
+* preserve gradients
+* stabilize deep networks
+
+Operationally:
+they help transformers train and scale effectively.
+
+Without residual connections:
+very deep architectures become difficult to optimize.
+
+---
+
+# Layer Normalization
+
+Transformer layers also use:
+
+# normalization operations.
+
+Normalization stabilizes activations and improves training dynamics.
+
+Although often overlooked:
+normalization contributes to:
+
+* numerical stability
+* smoother optimization
+* more reliable inference behavior
+
+---
+
+# Logits Generation
+
+After tokens pass through all transformer layers:
+the model produces:
+
+# logits.
+
+Logits are raw prediction scores for each vocabulary token.
+
+Example:
+
+```text
+Vocabulary size = 128,000
+```
+
+The model outputs:
+
+```text
+128,000 scores
+```
+
+for the next token prediction.
+
+These scores are not yet probabilities.
+
+---
+
+# Softmax
+
+The logits pass through:
+
+# softmax.
+
+Softmax converts raw scores into:
+
+## probabilities.
+
+The probabilities across the vocabulary sum to:
+
+```text
+1.0
+```
+
+This creates the next-token probability distribution.
+
+Sampling strategies then choose the actual output token.
+
+---
+
+# Sampling and Decoding
+
+The final stage of the forward pass pipeline involves:
+
+# decoding.
+
+Common decoding strategies include:
+
+* greedy decoding
+* top-k sampling
+* top-p sampling
+* temperature scaling
+
+These strategies influence:
+
+* determinism
+* creativity
+* diversity
+* stability
+
+Sampling is operationally important because it affects user experience and generation behavior.
+
+---
+
+# The Forward Pass Is Repeated Continuously
+
+One of the most important insights students must understand is:
+
+## inference repeatedly executes forward passes.
+
+For every generated token:
+the model performs another forward computation.
+
+This means:
+generation cost scales with:
+
+* output length
+* sequence length
+* concurrency
+* context size
+
+This repeated execution is why optimization matters so much.
+
+---
+
+# Why KV Cache Exists
+
+Without optimization:
+the model would repeatedly recompute attention over all prior tokens during generation.
+
+This would become prohibitively expensive.
+
+KV cache exists to avoid redundant computation.
+
+Later in this course we will study:
+
+* KV cache structure
+* cache growth
+* memory implications
+* PagedAttention
+* cache-aware scheduling
+
+KV cache is one of the most important ideas in modern inference systems.
+
+---
+
+# Forward Pass Bottlenecks
+
+The transformer forward pass is constrained by:
+
+* compute throughput
+* memory bandwidth
+* VRAM capacity
+* tensor movement
+* cache efficiency
+
+This is why modern inference engineering focuses heavily on:
+
+* fused kernels
+* memory-efficient attention
+* quantization
+* scheduling optimization
+
+The bottleneck is not merely “running the model.”
+
+The bottleneck is:
+
+## running the model efficiently at scale.
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+* the forward pass drives transformer inference
+* embeddings convert token IDs into vectors
+* positional information preserves sequence order
+* transformer layers repeatedly refine token representations
+* self-attention enables contextual reasoning
+* attention operations are computationally expensive
+* feed-forward networks consume substantial compute
+* logits represent next-token prediction scores
+* softmax converts logits into probabilities
+* forward passes repeat continuously during generation
+* KV cache exists to avoid redundant computation
+
+The transformer forward pass is the computational engine underlying modern LLM systems.
+
+Understanding it deeply is essential for meaningful inference optimization.
+
+---
