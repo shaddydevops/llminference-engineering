@@ -1718,3 +1718,502 @@ The transformer forward pass is the computational engine underlying modern LLM s
 Understanding it deeply is essential for meaningful inference optimization.
 
 ---
+
+# Prefill vs Decode
+
+One of the most important concepts in modern inference engineering is the distinction between:
+
+* prefill
+* decode
+
+Students who deeply understand this distinction suddenly understand:
+
+* why the first token is slow
+* why KV cache exists
+* why batching is difficult
+* why vLLM matters
+* why speculative decoding is valuable
+* why inference optimization is hard
+
+This section is foundational to the rest of the course.
+
+---
+
+# The Two Phases of Inference
+
+Autoregressive generation consists of two fundamentally different computational phases:
+
+```text
+1. Prefill Phase
+2. Decode Phase
+```
+
+Although both involve transformer forward passes, their behavior differs dramatically.
+
+Operationally:
+they behave like different workloads.
+
+Understanding this is critical for systems optimization.
+
+---
+
+# High-Level Intuition
+
+A useful mental model is:
+
+## Prefill
+
+> “Read and understand the prompt.”
+
+## Decode
+
+> “Generate tokens one at a time.”
+
+The hardware behavior of these phases differs substantially.
+
+---
+
+# Prefill Phase
+
+The prefill phase processes:
+
+# the entire input prompt.
+
+Example:
+
+```text
+"Explain why batching improves transformer inference throughput."
+```
+
+Before generation can begin, the model must:
+
+* tokenize the prompt
+* compute embeddings
+* run attention across all input tokens
+* initialize hidden states
+* populate KV cache
+
+This is computationally expensive.
+
+---
+
+# What Happens During Prefill
+
+During prefill:
+the model processes:
+
+## all prompt tokens simultaneously.
+
+This means:
+attention operations occur across the full sequence.
+
+Example:
+
+```text
+Input length = 500 tokens
+```
+
+The model processes:
+
+```text
+500 tokens together
+```
+
+This creates:
+
+* large tensor operations
+* heavy memory movement
+* expensive attention computation
+
+But:
+
+## it is highly parallelizable.
+
+This is extremely important.
+
+---
+
+# Why Prefill Parallelizes Well
+
+During prefill:
+all prompt tokens already exist.
+
+Because the entire prompt is known:
+the GPU can process many computations in parallel.
+
+This allows:
+
+* high GPU utilization
+* efficient tensor operations
+* large matrix multiplications
+
+GPUs perform extremely well during prefill.
+
+In many systems:
+
+## prefill achieves very high hardware efficiency.
+
+---
+
+# Decode Phase
+
+Decode begins after the first output token is generated.
+
+At this point:
+generation becomes:
+
+# autoregressive.
+
+This means:
+each new token depends on previous tokens.
+
+Example:
+
+```text
+The capital of Ghana is
+```
+
+Model predicts:
+
+```text
+Accra
+```
+
+Now the next prediction uses:
+
+```text
+The capital of Ghana is Accra
+```
+
+This repeats sequentially.
+
+---
+
+# Why Decode Is Fundamentally Different
+
+Unlike prefill:
+decode operates:
+
+## one token at a time.
+
+Only the newest token is processed during each decode step.
+
+This creates a critical limitation:
+
+# decode is inherently sequential.
+
+The next token cannot be generated until the current token exists.
+
+This dramatically changes hardware behavior.
+
+---
+
+# Decode Parallelism Is Limited
+
+During decode:
+future tokens do not yet exist.
+
+Therefore:
+the GPU cannot fully parallelize generation across future positions.
+
+This creates:
+
+* lower GPU utilization
+* smaller tensor operations
+* scheduling inefficiencies
+* memory-access bottlenecks
+
+This is one reason inference optimization is difficult.
+
+---
+
+# Why The First Token Is Slow
+
+One of the most visible consequences of prefill is:
+
+# Time To First Token (TTFT)
+
+TTFT measures:
+
+## how long it takes before the first generated token appears.
+
+The first token is slow because:
+the entire prefill phase must complete first.
+
+This includes:
+
+* tokenization
+* attention over full context
+* KV cache initialization
+* transformer computation across prompt tokens
+
+Only after prefill finishes can decode begin.
+
+---
+
+# Why Later Tokens Become Faster
+
+After prefill:
+decode steps become cheaper because:
+
+* KV cache already exists
+* prior computations are reused
+* only the newest token is processed
+
+This is why:
+token streaming often accelerates after the first token appears.
+
+Operationally:
+many systems exhibit:
+
+* slow TTFT
+* faster sustained tok/s afterward
+
+This distinction matters enormously in production systems.
+
+---
+
+# GPU Utilization Differences
+
+Prefill and decode stress GPUs differently.
+
+## Prefill
+
+Typically:
+
+* compute-heavy
+* highly parallel
+* large matrix operations
+* efficient GPU occupancy
+
+## Decode
+
+Typically:
+
+* memory-bound
+* sequential
+* smaller tensor operations
+* lower GPU utilization
+
+Modern inference systems must optimize both phases separately.
+
+---
+
+# Why KV Cache Exists
+
+Without KV cache:
+every decode step would recompute attention over:
+
+## the entire prior sequence.
+
+This would be catastrophically inefficient.
+
+Instead:
+KV cache stores:
+
+* previously computed keys
+* previously computed values
+
+This allows decode to reuse prior computations efficiently.
+
+KV cache dramatically reduces decode cost.
+
+But:
+it also increases:
+
+* memory usage
+* VRAM pressure
+* scheduling complexity
+
+Later sections explore this deeply.
+
+---
+
+# Prefill Cost Scales With Prompt Length
+
+Long prompts increase:
+
+* prefill latency
+* memory usage
+* attention cost
+
+This is because:
+attention computation scales with sequence length.
+
+Example:
+
+```text
+100-token prompt
+```
+
+vs
+
+```text
+10,000-token prompt
+```
+
+The longer prompt requires dramatically more:
+
+* memory movement
+* tensor operations
+* attention computation
+
+This is why long-context serving is difficult.
+
+---
+
+# Decode Cost Scales With Output Length
+
+Prefill depends primarily on:
+
+# input size.
+
+Decode depends primarily on:
+
+# output generation length.
+
+Long generations therefore:
+
+* extend inference duration
+* increase GPU occupancy time
+* consume scheduling resources
+
+At scale:
+generation length becomes economically important.
+
+---
+
+# Why Continuous Batching Is Hard
+
+Batching decode requests is difficult because:
+different users generate tokens at different speeds.
+
+Some requests:
+
+* finish early
+* stall
+* generate longer outputs
+* use different sampling behaviors
+
+This creates:
+
+# scheduler complexity.
+
+Continuous batching systems like vLLM exist largely to optimize decode efficiency under these constraints.
+
+---
+
+# Why Speculative Decoding Matters
+
+Decode is slow partly because:
+generation is sequential.
+
+Speculative decoding attempts to reduce this bottleneck by:
+
+* generating draft tokens
+* verifying them efficiently
+
+The goal is:
+
+## increasing effective decode throughput.
+
+This technique exists specifically because decode is difficult to parallelize.
+
+---
+
+# Operational Implications
+
+Production inference systems must balance:
+
+* prefill efficiency
+* decode efficiency
+* memory usage
+* latency
+* throughput
+
+Optimizing one phase may worsen another.
+
+For example:
+
+* aggressive batching may improve throughput
+* but worsen TTFT
+
+These are real engineering tradeoffs.
+
+---
+
+# Mental Model
+
+Students should think of:
+
+## prefill
+
+as:
+
+```text
+large parallel computation
+```
+
+and:
+
+## decode
+
+as:
+
+```text
+sequential token streaming
+```
+
+These are fundamentally different workload patterns.
+
+Most inference optimizations exist to manage this tension.
+
+---
+
+# Why This Concept Is Foundational
+
+Prefill vs decode explains:
+
+* TTFT
+* KV cache
+* batching difficulty
+* scheduler design
+* throughput bottlenecks
+* memory growth
+* streaming latency
+* speculative decoding
+* vLLM architecture decisions
+
+This is one of the most important concepts in modern inference engineering.
+
+Students should revisit it repeatedly throughout the course.
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+* inference consists of prefill and decode phases
+* prefill processes the full prompt simultaneously
+* prefill parallelizes efficiently
+* decode generates tokens sequentially
+* decode is inherently difficult to parallelize
+* TTFT is dominated by prefill cost
+* sustained generation speed differs from TTFT
+* KV cache exists to optimize decode
+* long prompts increase prefill cost
+* long outputs increase decode cost
+* continuous batching exists largely because decode is difficult
+
+This distinction forms the conceptual bridge into:
+
+* KV cache systems
+* batching architectures
+* vLLM
+* PagedAttention
+* speculative decoding
+
+Without understanding prefill vs decode deeply, modern inference systems remain difficult to reason about.
+
+---
