@@ -2217,3 +2217,479 @@ This distinction forms the conceptual bridge into:
 Without understanding prefill vs decode deeply, modern inference systems remain difficult to reason about.
 
 ---
+
+
+# KV Cache Introduction
+
+One of the most important optimizations in modern language model inference is:
+
+# KV cache.
+
+Without KV cache:
+modern autoregressive generation would become prohibitively expensive.
+
+KV cache exists because repeatedly recomputing attention over previous tokens during decoding is computationally wasteful.
+
+This section introduces:
+
+* what KV cache is
+* why it exists
+* why it matters
+* how it changes inference economics
+* why it creates new memory problems
+
+Understanding KV cache is essential for:
+
+* vLLM
+* PagedAttention
+* batching systems
+* speculative decoding
+* long-context serving
+
+KV cache is one of the foundational concepts of modern inference engineering.
+
+---
+
+# The Core Problem
+
+Recall from the previous section:
+
+During autoregressive generation:
+new tokens are generated one at a time.
+
+Example:
+
+```text
+The capital of Ghana is
+```
+
+Model predicts:
+
+```text
+Accra
+```
+
+Now the model must generate the next token using:
+
+```text
+The capital of Ghana is Accra
+```
+
+Then:
+
+```text
+The capital of Ghana is Accra .
+```
+
+Then:
+
+```text
+The capital of Ghana is Accra . It
+```
+
+This process continues repeatedly.
+
+---
+
+# The Naive Approach
+
+Without optimization:
+each decode step would recompute:
+
+## attention over the entire sequence.
+
+Example:
+
+Step 1:
+
+```text
+5 tokens
+```
+
+Step 2:
+
+```text
+6 tokens
+```
+
+Step 3:
+
+```text
+7 tokens
+```
+
+The model would repeatedly recompute attention for:
+
+* old tokens
+* unchanged tokens
+* previously processed context
+
+This is extremely inefficient.
+
+---
+
+# Why Recomputing Attention Is Wasteful
+
+Most prior tokens do not change during generation.
+
+Only:
+
+## the newest token
+
+changes.
+
+Yet naive decoding would repeatedly recompute:
+
+* queries
+* keys
+* values
+* attention interactions
+
+for all previous tokens.
+
+This creates:
+
+* unnecessary compute
+* wasted memory movement
+* increased latency
+* reduced throughput
+
+KV cache exists to eliminate this redundancy.
+
+---
+
+# What KV Cache Stores
+
+KV cache stores:
+
+* Keys (K)
+* Values (V)
+
+generated during previous attention computations.
+
+Instead of recomputing these tensors every decode step:
+the system reuses them.
+
+Hence the name:
+
+# KV cache.
+
+---
+
+# Why Queries Are Not Cached
+
+During generation:
+the newest token produces:
+
+* a new query
+* a new key
+* a new value
+
+The query changes every step because:
+the current token changes every step.
+
+However:
+previous keys and values remain valid.
+
+Therefore:
+
+* queries are recomputed
+* keys and values are cached
+
+This dramatically reduces redundant computation.
+
+---
+
+# High-Level Decode Flow With KV Cache
+
+Without KV cache:
+
+```text
+Recompute full sequence attention every step
+```
+
+With KV cache:
+
+```text
+Reuse previous keys/values
++
+Compute only newest token attention
+```
+
+This changes decode economics dramatically.
+
+---
+
+# Operational Impact
+
+KV cache significantly improves:
+
+* decode speed
+* throughput
+* latency
+* GPU utilization
+
+Without KV cache:
+autoregressive decoding becomes far slower.
+
+Modern LLM serving systems rely heavily on KV cache efficiency.
+
+---
+
+# The Tradeoff
+
+KV cache improves compute efficiency.
+
+But:
+it increases:
+
+# memory usage.
+
+This tradeoff is extremely important.
+
+As generation continues:
+KV cache grows.
+
+As context length increases:
+KV cache grows further.
+
+As concurrency increases:
+memory pressure increases massively.
+
+Inference engineering becomes:
+
+## a memory management problem.
+
+---
+
+# KV Cache Growth
+
+Each generated token adds:
+
+* new key tensors
+* new value tensors
+
+to the cache.
+
+Therefore:
+KV cache size scales roughly with:
+
+* sequence length
+* number of layers
+* hidden dimensions
+* batch size
+* concurrency
+
+Large context windows can therefore consume enormous amounts of VRAM.
+
+---
+
+# Why Long Context Is Difficult
+
+Many people assume:
+larger context windows are “just software improvements.”
+
+Operationally:
+they are memory-intensive infrastructure challenges.
+
+Longer contexts mean:
+
+* larger KV caches
+* more VRAM pressure
+* more memory fragmentation
+* harder scheduling
+
+This is one reason long-context inference is expensive.
+
+---
+
+# Memory Fragmentation
+
+In production systems:
+requests:
+
+* start at different times
+* finish at different times
+* generate different output lengths
+
+This creates irregular KV cache allocation patterns.
+
+Over time:
+memory becomes fragmented.
+
+This creates:
+
+* inefficient VRAM usage
+* wasted memory regions
+* scheduling difficulties
+
+Modern serving systems like vLLM were designed largely to address this problem.
+
+---
+
+# KV Cache and Time To First Token
+
+KV cache also influences:
+
+# TTFT.
+
+During prefill:
+the model computes initial KV states for the prompt.
+
+This initialization contributes to:
+
+* prefill latency
+* memory allocation cost
+
+Afterward:
+decode becomes cheaper because cached states are reused.
+
+---
+
+# Why KV Cache Matters Operationally
+
+KV cache directly affects:
+
+* maximum concurrency
+* maximum context length
+* throughput
+* serving cost
+* GPU memory usage
+
+In many production systems:
+KV cache memory becomes:
+
+# the dominant VRAM consumer.
+
+This surprises many beginners.
+
+They assume:
+model weights dominate memory usage.
+
+But during large-scale serving:
+KV cache can become equally important or even larger.
+
+---
+
+# KV Cache and Batching
+
+Batching complicates KV cache management.
+
+Different requests:
+
+* have different lengths
+* generate at different speeds
+* terminate unpredictably
+
+The serving system must:
+
+* allocate cache memory dynamically
+* reuse memory efficiently
+* avoid fragmentation
+* schedule requests intelligently
+
+This becomes a systems engineering challenge.
+
+---
+
+# Why PagedAttention Exists
+
+Traditional KV cache allocation strategies often waste VRAM.
+
+PagedAttention improves this by:
+
+* managing cache memory in blocks/pages
+* reducing fragmentation
+* improving allocation efficiency
+* enabling larger effective batch sizes
+
+This is one of the core innovations behind vLLM.
+
+Students will study this deeply later in the course.
+
+---
+
+# KV Cache Is a Fundamental Optimization
+
+Students should understand:
+
+KV cache is not:
+
+## an optional optimization.
+
+It is:
+
+## a foundational requirement for efficient autoregressive inference.
+
+Without KV cache:
+modern LLM serving would be dramatically slower and more expensive.
+
+---
+
+# Mental Model
+
+Students should think of KV cache as:
+
+```text
+Reusable memory of previous attention computations
+```
+
+The system remembers prior attention state so it does not need to recompute everything repeatedly.
+
+This is conceptually similar to:
+
+* caching in databases
+* memoization in algorithms
+* reuse in compiler optimization
+
+The principle is:
+
+## avoid redundant work.
+
+---
+
+# Engineering Perspective
+
+KV cache transforms inference from:
+
+## primarily compute-bound
+
+into
+
+## heavily memory-constrained.
+
+This is a major shift.
+
+Once KV cache enters the picture:
+inference optimization increasingly becomes about:
+
+* memory allocation
+* fragmentation
+* scheduling
+* cache efficiency
+* VRAM utilization
+
+This is why modern inference engineering resembles systems engineering.
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+* KV cache stores previous keys and values
+* KV cache avoids redundant attention computation
+* decode becomes much cheaper with caching
+* KV cache improves throughput and latency
+* KV cache increases VRAM usage
+* cache size grows with sequence length
+* long-context inference is memory-intensive
+* batching complicates cache management
+* fragmentation becomes a serious systems problem
+* PagedAttention exists largely to optimize KV cache allocation
+
+KV cache is one of the most important ideas in modern inference systems.
+
+Many later optimizations in this course build directly on this concept.
+
+---
