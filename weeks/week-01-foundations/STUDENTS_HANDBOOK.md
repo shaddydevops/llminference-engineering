@@ -397,3 +397,368 @@ Next Token Selection
 Append Token To Context
     ↓
 Repeat
+
+
+---
+
+# Why Inference Is Expensive
+
+One of the biggest misconceptions in modern AI is the assumption that:
+> generating text is computationally cheap.
+
+From the user’s perspective, a language model appears simple:
+- type prompt
+- receive answer
+
+But underneath that interaction is a highly optimized distributed inference system performing enormous amounts of computation and memory movement.
+
+Modern inference systems are expensive because every generated token requires:
+- matrix multiplications
+- attention operations
+- memory reads/writes
+- cache management
+- scheduling decisions
+- GPU coordination
+
+At scale, these costs compound rapidly.
+
+Understanding where these costs come from is essential for inference engineering.
+
+---
+
+# The Hidden Complexity Behind a Token
+
+A single generated token may require:
+- billions of floating point operations
+- access to large parameter tensors
+- movement of activations across GPU memory
+- attention computations over prior context
+
+For small models this is manageable.
+
+For frontier-scale models:
+- parameter counts reach hundreds of billions
+- context windows become extremely large
+- concurrency grows massively
+
+As a result:
+## inference becomes an infrastructure problem.
+
+---
+
+# FLOPs and Computational Cost
+
+Inference workloads are dominated by:
+# tensor operations.
+
+Particularly:
+- matrix multiplications
+- attention calculations
+
+These operations are computationally intensive because transformer architectures repeatedly multiply very large matrices.
+
+For example:
+- embeddings
+- projection matrices
+- attention tensors
+- feed-forward layers
+
+all require substantial compute.
+
+This is why GPUs dominate inference systems.
+
+---
+
+# Why GPUs Matter
+
+CPUs are optimized for:
+- low-latency sequential tasks
+- operating system workloads
+- branching logic
+
+GPUs are optimized for:
+- massive parallelism
+- tensor arithmetic
+- matrix operations
+- high-throughput computation
+
+Transformers map extremely well to GPU architectures because many operations can execute in parallel.
+
+Without GPUs:
+- inference latency would become impractical
+- throughput would collapse
+- serving costs would become enormous
+
+---
+
+# Compute vs Memory
+
+An important realization for inference engineers is:
+
+## inference is often memory-bound rather than compute-bound.
+
+This surprises many beginners.
+
+The issue is not always:
+> “the GPU is too slow.”
+
+Often the issue is:
+> “memory movement is too expensive.”
+
+Modern GPUs can execute arithmetic extremely quickly.
+
+But repeatedly moving:
+- weights
+- activations
+- KV cache tensors
+
+through memory hierarchies becomes a bottleneck.
+
+This is why:
+- memory bandwidth matters enormously
+- KV cache optimization matters
+- FlashAttention matters
+- PagedAttention exists
+
+---
+
+# Memory Bandwidth
+
+Memory bandwidth refers to:
+## how quickly data can move through memory systems.
+
+Inference repeatedly transfers:
+- parameters
+- activations
+- attention tensors
+- cache states
+
+between:
+- VRAM
+- caches
+- compute units
+
+If memory movement becomes slow:
+- GPUs sit idle waiting for data
+- throughput drops
+- latency increases
+
+This is one of the central engineering challenges in modern inference systems.
+
+---
+
+# VRAM Pressure
+
+Large language models require enormous amounts of memory.
+
+Memory is consumed by:
+- model weights
+- activations
+- KV cache
+- batching overhead
+- temporary tensors
+
+As context windows increase:
+## KV cache memory grows significantly.
+
+As concurrency increases:
+## memory pressure increases further.
+
+This creates operational constraints around:
+- maximum batch size
+- maximum context length
+- concurrency limits
+
+Inference engineering is therefore heavily constrained by VRAM capacity.
+
+---
+
+# Why Context Length Is Expensive
+
+Many users assume long prompts are inexpensive.
+
+Operationally:
+they are costly.
+
+Longer context means:
+- more attention operations
+- larger KV caches
+- more memory reads
+- longer prefill computation
+
+This directly impacts:
+- latency
+- throughput
+- memory usage
+
+As context windows scale into:
+- tens of thousands
+- or hundreds of thousands of tokens
+
+efficient memory management becomes critical.
+
+---
+
+# Attention Complexity
+
+Attention mechanisms are computationally expensive because:
+each token must attend to prior tokens.
+
+Naively:
+this scales quadratically with sequence length.
+
+This means:
+- doubling context length can dramatically increase computation
+- long prompts become increasingly expensive
+
+Modern optimization techniques exist largely to reduce these costs.
+
+Examples include:
+- FlashAttention
+- KV cache reuse
+- sliding window attention
+- grouped-query attention
+
+These will appear later in the course.
+
+---
+
+# Why The First Token Is Slow
+
+One of the most important operational metrics is:
+# Time To First Token (TTFT)
+
+The first generated token is often significantly slower than subsequent tokens.
+
+Why?
+
+Because before generation begins, the system must:
+- tokenize the prompt
+- run prefill computation
+- initialize attention states
+- populate KV cache
+- process the full input context
+
+This initial computation is expensive.
+
+Later decode steps become cheaper because:
+- KV cache avoids recomputation
+- only the newest token is processed
+
+This distinction becomes foundational later in the course.
+
+---
+
+# Throughput vs Latency
+
+Inference systems constantly balance:
+- latency
+- throughput
+
+These metrics often conflict.
+
+For example:
+- larger batches improve throughput
+- but increase waiting time for individual users
+
+This creates engineering tradeoffs.
+
+Production serving systems therefore optimize carefully depending on:
+- workload type
+- concurrency patterns
+- SLA requirements
+- infrastructure costs
+
+There is rarely a perfect configuration.
+
+---
+
+# Why Inference Optimization Exists
+
+Inference optimization techniques exist because:
+## naive inference is economically inefficient.
+
+Without optimization:
+- GPUs are underutilized
+- memory is wasted
+- latency becomes excessive
+- throughput remains low
+- serving costs increase dramatically
+
+Modern systems therefore rely on:
+- batching
+- KV caching
+- quantization
+- speculative decoding
+- optimized attention kernels
+- scheduling algorithms
+
+This course explores each of these deeply.
+
+---
+
+# The Economics of Inference
+
+At production scale:
+small inefficiencies become extremely expensive.
+
+Consider:
+- millions of users
+- billions of generated tokens
+- thousands of GPUs
+
+A small improvement in:
+- latency
+- memory efficiency
+- throughput
+
+can save enormous amounts of money.
+
+This is why companies invest heavily in inference optimization research.
+
+Inference engineering is not merely academic.
+
+It has direct economic impact.
+
+---
+
+# Operational Reality
+
+Production inference systems must simultaneously manage:
+- hardware limits
+- user demand
+- latency expectations
+- reliability
+- scaling
+- infrastructure cost
+
+This is why inference engineering increasingly resembles:
+# distributed systems engineering.
+
+The challenge is not simply generating text.
+
+The challenge is generating text:
+- quickly
+- reliably
+- cheaply
+- at scale
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+- inference is computationally expensive
+- GPUs dominate because transformers require massive parallel computation
+- memory movement is often the real bottleneck
+- VRAM capacity constrains serving systems
+- long context windows increase operational cost
+- attention operations are expensive
+- TTFT emerges from expensive prefill computation
+- latency and throughput often conflict
+- optimization exists because naive inference is inefficient
+
+These ideas form the operational foundation for everything later in the course.
+
+---
