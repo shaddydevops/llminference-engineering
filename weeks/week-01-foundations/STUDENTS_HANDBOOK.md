@@ -762,3 +762,432 @@ Students should now understand:
 These ideas form the operational foundation for everything later in the course.
 
 ---
+
+
+# Tokenization
+
+Before a language model can process text, the text must first be transformed into a numerical representation.
+
+Language models do not directly understand:
+
+* words
+* sentences
+* grammar
+* meaning
+
+They operate on:
+
+# tokens.
+
+Tokenization is the process of converting raw text into these token units.
+
+This step is foundational to modern language model systems.
+
+---
+
+# Why Tokenization Exists
+
+Neural networks operate on numbers.
+
+Not raw language.
+
+Therefore:
+human-readable text must first be transformed into discrete numerical representations before inference can occur.
+
+This transformation pipeline typically looks like:
+
+```text
+Raw Text
+    ↓
+Tokenization
+    ↓
+Token IDs
+    ↓
+Embeddings
+    ↓
+Transformer Processing
+```
+
+Without tokenization:
+transformers cannot operate on language.
+
+---
+
+# What Is a Token?
+
+A token is a unit of text representation used by the model.
+
+Depending on the tokenizer, a token may represent:
+
+* an entire word
+* part of a word
+* punctuation
+* whitespace
+* symbols
+* even fragments of words
+
+For example:
+
+```text
+"unbelievable"
+```
+
+might tokenize into:
+
+```text
+["un", "believ", "able"]
+```
+
+Different tokenizers may split text differently.
+
+This matters operationally.
+
+---
+
+# Tokens vs Words
+
+One of the most common beginner mistakes is assuming:
+
+> 1 token = 1 word.
+
+This is incorrect.
+
+In practice:
+
+* some words become multiple tokens
+* some tokens represent punctuation
+* some tokens represent spaces
+* some tokens are extremely short fragments
+
+For English:
+a rough approximation is:
+
+```text
+1 token ≈ 0.75 words
+```
+
+But this varies significantly.
+
+---
+
+# Why Token Count Matters
+
+In production systems:
+
+## tokens are the real computational unit.
+
+Not words.
+
+Inference cost scales largely with:
+
+* input token count
+* output token count
+* context length
+
+This means:
+longer prompts cost more.
+
+Every additional token increases:
+
+* memory usage
+* attention computation
+* latency
+* infrastructure cost
+
+This is why:
+token efficiency matters operationally.
+
+---
+
+# Vocabulary
+
+Every tokenizer has a:
+
+# vocabulary.
+
+The vocabulary is the set of all tokens recognized by the model.
+
+Modern vocabularies may contain:
+
+* tens of thousands
+* or hundreds of thousands
+
+of token entries.
+
+For example:
+a tokenizer may contain tokens for:
+
+* common words
+* punctuation
+* programming syntax
+* multilingual text
+* whitespace patterns
+
+Each token is assigned:
+
+# a unique integer ID.
+
+---
+
+# Token IDs
+
+After tokenization, tokens are converted into:
+
+# token IDs.
+
+Example:
+
+```text
+"Hello world"
+```
+
+might become:
+
+```text
+[15496, 995]
+```
+
+These IDs are what actually enter the neural network.
+
+The model never directly sees:
+
+```text
+Hello world
+```
+
+It only sees:
+
+```text
+[15496, 995]
+```
+
+This distinction is extremely important.
+
+---
+
+# Embeddings
+
+Token IDs themselves are not meaningful to the transformer.
+
+They are first converted into:
+
+# embeddings.
+
+Embeddings are dense numerical vector representations.
+
+These vectors capture:
+
+* semantic relationships
+* syntactic structure
+* contextual information
+
+The embedding layer maps:
+
+```text
+Token ID → High-dimensional vector
+```
+
+This becomes the starting point for transformer computation.
+
+---
+
+# Byte Pair Encoding (BPE)
+
+Many modern tokenizers use:
+
+# Byte Pair Encoding (BPE)
+
+BPE works by:
+
+* identifying common text patterns
+* merging frequently occurring sequences
+* constructing reusable subword units
+
+This allows models to:
+
+* handle rare words efficiently
+* reduce vocabulary explosion
+* generalize better across language patterns
+
+BPE is one reason models can process:
+
+* misspellings
+* code
+* multilingual text
+* uncommon names
+
+without requiring every possible word in the vocabulary.
+
+---
+
+# Why Subword Tokenization Matters
+
+Subword tokenization provides important operational advantages.
+
+Instead of requiring:
+
+```text
+every possible word
+```
+
+the tokenizer can compose words from smaller pieces.
+
+For example:
+
+```text
+"microarchitectural"
+```
+
+may be split into reusable fragments.
+
+This dramatically reduces:
+
+* vocabulary size
+* memory requirements
+* out-of-vocabulary failures
+
+while preserving flexibility.
+
+---
+
+# Tokenization Is Not Neutral
+
+Tokenization choices affect:
+
+* efficiency
+* context length
+* multilingual performance
+* code generation quality
+* inference cost
+
+Poor tokenization can:
+
+* inflate token counts
+* waste context window space
+* increase latency
+
+For example:
+some languages require more tokens per sentence than others.
+
+This creates:
+
+# unequal inference costs across languages.
+
+---
+
+# Context Windows
+
+Language models operate within finite:
+
+# context windows.
+
+The context window defines:
+
+## the maximum number of tokens the model can process simultaneously.
+
+Examples:
+
+* 4K tokens
+* 8K tokens
+* 32K tokens
+* 128K tokens
+
+Everything inside the context window contributes to:
+
+* memory usage
+* attention computation
+* latency
+
+As token counts increase:
+inference becomes more expensive.
+
+---
+
+# Tokenization and Economics
+
+Tokenization directly impacts:
+
+# operational economics.
+
+More tokens mean:
+
+* more GPU compute
+* more attention operations
+* more memory movement
+* more infrastructure cost
+
+This is why API providers bill by:
+
+# token usage.
+
+Tokens are effectively the currency of inference systems.
+
+---
+
+# Tokenization and Prompt Engineering
+
+Many prompt engineering practices are actually:
+
+# token optimization practices.
+
+Examples:
+
+* concise prompts
+* compressed instructions
+* reduced redundancy
+
+can significantly reduce:
+
+* latency
+* inference cost
+* context pressure
+
+Efficient prompting therefore has infrastructure implications.
+
+---
+
+# Important Engineering Insight
+
+Students should begin thinking of prompts not as:
+
+```text
+human language
+```
+
+but as:
+
+```text
+token sequences consuming finite system resources
+```
+
+This mindset becomes essential later when discussing:
+
+* batching
+* KV cache growth
+* long-context serving
+* throughput optimization
+
+---
+
+# Key Takeaways
+
+Students should now understand:
+
+* transformers operate on tokens, not raw text
+* tokenization converts text into token IDs
+* tokens are not equivalent to words
+* vocabularies map tokens to integers
+* embeddings convert token IDs into vectors
+* BPE enables flexible subword representations
+* token counts directly affect inference cost
+* context windows constrain inference systems
+* tokens are the operational currency of LLM serving
+
+Tokenization may appear simple, but it has profound implications for:
+
+* latency
+* memory usage
+* serving economics
+* infrastructure scaling
+
+---
