@@ -259,3 +259,141 @@ But behind every generated token is:
 Understanding those systems is what this course is about.
 
 Welcome to Production LLM Inference Engineering.
+
+
+
+---
+
+# What Is Inference?
+
+The word “inference” is used constantly in AI discussions, but it is often poorly understood.
+
+In practical terms, inference refers to:
+## using a trained model to produce predictions.
+
+For large language models, inference means:
+> taking input tokens and generating output tokens.
+
+That sounds simple.
+
+Operationally, it is not.
+
+Modern inference systems execute billions or trillions of mathematical operations while attempting to satisfy strict production constraints around:
+- latency
+- throughput
+- memory usage
+- concurrency
+- reliability
+- infrastructure cost
+
+Understanding inference is the foundation of this course.
+
+---
+
+# Training vs Inference
+
+One of the most important distinctions in machine learning systems is the difference between:
+- training
+- inference
+
+These workloads behave very differently.
+
+---
+
+# Training
+
+Training is the process of:
+## adjusting model parameters.
+
+During training:
+- gradients are computed
+- weights are updated
+- backpropagation occurs
+- optimization algorithms run repeatedly
+
+Training is computationally expensive because the system must:
+- store activations
+- compute gradients
+- propagate errors backward
+- update billions of parameters
+
+Training is about:
+## learning.
+
+---
+
+# Inference
+
+Inference is different.
+
+During inference:
+- weights are fixed
+- gradients are not computed
+- no learning occurs
+- the model only performs forward passes
+
+Inference is about:
+## prediction.
+
+The system receives:
+- a prompt
+- input tokens
+- prior context
+
+and predicts:
+- the next token probability distribution.
+
+That process repeats autoregressively until generation stops.
+
+---
+
+# Why Inference Matters More Than Most People Realize
+
+Many people assume training is the primary engineering challenge in AI.
+
+In reality:
+## inference often dominates operational cost.
+
+Why?
+
+Because training may happen:
+- once
+- occasionally
+- periodically
+
+But inference happens:
+- continuously
+- for every user
+- at production scale
+- under latency constraints
+
+For large consumer systems:
+- millions of inference requests occur daily
+- latency directly affects user experience
+- infrastructure costs scale with usage
+
+As a result:
+## efficient inference becomes economically critical.
+
+---
+
+# The Core Inference Loop
+
+At a high level, language model inference follows this cycle:
+
+```text
+Input Prompt
+    ↓
+Tokenization
+    ↓
+Transformer Forward Pass
+    ↓
+Logits Generation
+    ↓
+Sampling
+    ↓
+Next Token Selection
+    ↓
+Append Token To Context
+    ↓
+Repeat
